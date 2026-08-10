@@ -27,15 +27,15 @@ somewhere.
 
 ## Using it
 
-**Count** — the current event, large. `PREV` / `NEXT` step through the rest, in
-the order they'll happen. Under the number: the full date, the same span in
-weeks or years, and — for anything with a time on it, on the day or the day
-before — a live clock. The row of dots is how far through the wait you are, from
-the day you added it (or from last year, for a repeating one).
+**Count** — every event, counted, in the order they'll happen: what's coming
+above what's gone, the nearest one largest. Under each number: the full date, the
+same span in weeks or years, and — for anything with a time on it, on the day or
+the day before — a live clock. The row of dots is how far through the wait you
+are, from the day you added it (or from last year, for a repeating one).
 
-**Events** — everything, what's coming above what's gone. Tap one to put it on
-the Count screen, `EDIT` to change or delete it, and the dot on the right flags
-it for milestone alerts.
+**Events** — the same set as a compact list. Tap one to jump to its card on the
+Count screen, `EDIT` to change or delete it, and the dot on the right flags it
+for milestone alerts.
 
 Events are either one-off or **every year**. A yearly one always counts to the
 next time it comes round and tells you which time that is — a 68th birthday, a

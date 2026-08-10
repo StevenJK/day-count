@@ -81,13 +81,19 @@
   .dots i.done { background: var(--paper); }
   .dots i.now { background: var(--accent); transform: scale(1.35); }
 
-  .arrows { display: flex; gap: 6px; margin-top: 16px; }
-  .arrows button {
-    flex: 1; background: transparent; color: var(--paper); border: 1px solid var(--line);
-    border-radius: 18px; padding: 8px 0; font-family: var(--mono); font-size: 11px;
-    letter-spacing: .1em; cursor: pointer;
-  }
-  .arrows button:disabled { opacity: .25; }
+  /* The whole point of the Count screen is seeing the lot at once, so
+     everything gets a card and you scroll. The nearest one is bigger,
+     because in practice that's the number you opened the app for. */
+  #focusWrap { display: flex; flex-direction: column; gap: 10px; }
+  .focus.lesser { padding: 18px 18px 16px; }
+  .focus.lesser .count { font-size: 46px; margin: 6px 0 2px; }
+  .focus.lesser .count.small { font-size: 34px; }
+  .focus.lesser .title { font-size: 16px; margin-top: 11px; }
+  .focus.lesser .when { font-size: 11px; }
+  .focus.lesser .dots { margin-top: 13px; }
+  .focus.lesser .dots i { width: 5px; height: 5px; }
+  /* a card you've just jumped to from Events, so the eye lands on it */
+  .focus.mark { border-color: var(--accent); }
 
   /* ── lists and forms ── */
   .row {
@@ -340,7 +346,8 @@ let prefs = null;
 let view = "count";
 let editing = null;
 let formRepeat = "none";
-let focusIdx = 0;
+let highlightId = null;    // the card marked after a tap in Events
+let pendingScroll = false; // ...and whether we still owe it a scroll
 
 // ── dates ────────────────────────────────────────────────────
 // Everything here works in whole local calendar days, deliberately.
@@ -441,17 +448,43 @@ function sorted() {
   return up.concat(past);
 }
 
-// ── the big number ───────────────────────────────────────────
-function renderFocus() {
+// ── the big numbers ──────────────────────────────────────────
+// Every event, counted, in the order they'll happen — what's coming
+// above what's gone, the same split as the Events list.
+function renderCount() {
   const wrap = document.getElementById("focusWrap");
   const all = sorted();
   if (!all.length) {
     wrap.innerHTML = `<div class="empty">Nothing counted yet.<br>Add a date and this page fills up.</div>`;
     return;
   }
-  focusIdx = Math.max(0, Math.min(focusIdx, all.length - 1));
-  const [ev, r] = all[focusIdx];
 
+  let html = "", header = null;
+  all.forEach(([ev, r], i) => {
+    const grp = r.days >= 0 ? "COMING" : "GONE BY";
+    if (grp !== header) { html += `<div class="group">${grp}</div>`; header = grp; }
+    html += card(ev, r, i === 0);
+  });
+  wrap.innerHTML = html;
+
+  // Matching cards to events by walking the nodes rather than by building
+  // a selector out of an id — ids come back from imported backups too, and
+  // they don't have to be tidy.
+  wrap.querySelectorAll(".focus").forEach((el) => {
+    const pair = all.find(([ev]) => ev.id === el.dataset.id);
+    if (pair) renderDots(el.querySelector("[data-dots]"), pair[0], pair[1]);
+    // arriving from a tap in Events: put that one under the thumb. The
+    // mark stays so you can see which one you asked for; the scroll is
+    // owed once, or every later re-render would yank the page around.
+    if (highlightId && el.dataset.id === highlightId) {
+      el.classList.add("mark");
+      if (pendingScroll) { el.scrollIntoView({ behavior: "smooth", block: "center" }); pendingScroll = false; }
+    }
+  });
+  tick();
+}
+
+function card(ev, r, lead) {
   // On the day itself a plain zero is the satisfying thing to see, except
   // for an anniversary, where the number you actually want is which one.
   const label = r.dir === "today" ? "TODAY" : r.dir === "until" ? "DAYS UNTIL" : "DAYS SINCE";
@@ -466,33 +499,23 @@ function renderFocus() {
   if (words) when.push(words);
   if (r.ordinal && r.dir !== "today") when.push(`${r.ordinal}${suffix(r.ordinal)} time round`);
 
-  wrap.innerHTML = `
-    <div class="focus ${r.dir === "since" ? "past" : ""}">
+  return `
+    <div class="focus ${r.dir === "since" ? "past" : ""} ${lead ? "" : "lesser"}" data-id="${esc(ev.id)}">
       <div class="label">${esc(label)}</div>
       <div class="count ${big.length > 4 ? "small" : ""}">${esc(big)}</div>
       <div class="unit">${esc(unit)}</div>
       <div class="title">${esc(ev.title)}</div>
       <div class="when">${when.map(esc).join("<br>")}</div>
-      <div class="clock" id="ticker"></div>
+      <div class="clock" data-clock="${esc(ev.id)}"></div>
       ${ev.note ? `<div class="note">${esc(ev.note)}</div>` : ""}
-      <div class="dots" id="dots"></div>
-      <div class="arrows">
-        <button id="prev" ${focusIdx === 0 ? "disabled" : ""}>← PREV</button>
-        <button id="next" ${focusIdx === all.length - 1 ? "disabled" : ""}>NEXT →</button>
-      </div>
+      <div class="dots" data-dots="${esc(ev.id)}"></div>
     </div>`;
-
-  document.getElementById("prev").onclick = () => { focusIdx--; renderFocus(); };
-  document.getElementById("next").onclick = () => { focusIdx++; renderFocus(); };
-  renderDots(ev, r);
-  tick();
 }
 
 // How far through the wait we are. A repeating event has an obvious span
 // — last time round to this time round. A one-off is measured from the
 // day it was added, which is the only honest starting line available.
-function renderDots(ev, r) {
-  const box = document.getElementById("dots");
+function renderDots(box, ev, r) {
   if (!box) return;
   if (r.dir === "since" || r.days === 0) { box.remove(); return; }
 
@@ -515,15 +538,18 @@ function renderDots(ev, r) {
 // time on it, on the day or the day before. A countdown of seconds to a
 // date eleven months out is just noise that keeps the screen awake.
 function tick() {
-  const el = document.getElementById("ticker");
-  if (!el) return;
-  const all = sorted();
-  if (!all.length) return;
-  const [, r] = all[Math.min(focusIdx, all.length - 1)] || [];
-  if (!r || r.ms === null || r.ms < 0 || r.ms > 2 * DAY) { el.textContent = ""; return; }
-  const s = Math.floor(r.ms / 1000);
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  el.textContent = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  const clocks = document.querySelectorAll("[data-clock]");
+  if (!clocks.length) return;
+  const now = new Date();
+  clocks.forEach((el) => {
+    const ev = events.find((x) => x.id === el.dataset.clock);
+    if (!ev) return;
+    const r = reckon(ev, now);
+    if (r.ms === null || r.ms < 0 || r.ms > 2 * DAY) { el.textContent = ""; return; }
+    const s = Math.floor(r.ms / 1000);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    el.textContent = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  });
 }
 
 // ── the list ─────────────────────────────────────────────────
@@ -540,7 +566,7 @@ function renderList() {
     if (grp !== header) { html += `<div class="group">${grp}</div>`; header = grp; }
     const n = r.dir === "today" ? "TODAY" : r.abs;
     html += `
-      <div class="row ${r.dir === "since" ? "since" : ""} ${i === focusIdx ? "on" : ""}" data-id="${esc(ev.id)}">
+      <div class="row ${r.dir === "since" ? "since" : ""} ${ev.id === highlightId ? "on" : ""}" data-id="${esc(ev.id)}">
         <div class="n" style="${n === "TODAY" ? "font-size:13px" : ""}">${esc(String(n))}</div>
         <div class="body">
           <div class="t">${esc(ev.title)}</div>
@@ -557,9 +583,10 @@ function renderList() {
   // small target rather than the whole row.
   box.querySelectorAll(".row").forEach((el) => {
     el.onclick = () => {
-      focusIdx = sorted().findIndex(([x]) => x.id === el.dataset.id);
+      highlightId = el.dataset.id;
+      pendingScroll = true;
       show("count");
-      renderFocus();
+      renderCount();
       renderList();
     };
   });
@@ -745,7 +772,7 @@ function show(v) {
 async function refresh() {
   events = await loadEvents();
   document.getElementById("todayStamp").textContent = fmtShort(new Date());
-  renderFocus();
+  renderCount();
   renderList();
   document.getElementById("alertToggle").classList.toggle("on", !!prefs.alerts);
   document.getElementById("badgeToggle").classList.toggle("on", !!prefs.badge);
@@ -788,7 +815,8 @@ async function init() {
     };
     await putEvent(ev);
     closeForm();
-    focusIdx = Math.max(0, sorted().findIndex(([x]) => x.id === ev.id));
+    highlightId = ev.id;
+    pendingScroll = true;
     await refresh();
     toast(editing ? "Saved" : "Added");
   };
