@@ -313,8 +313,8 @@
       <div class="meta" style="margin:8px 0 12px">
         Everything lives in this browser's storage on this phone and nowhere
         else. Clearing site data deletes it for good, so keep a file somewhere.
-        The backup includes your pictures, which makes the file a good deal
-        bigger — that's the point of it.
+        The backup holds the dates, not the pictures — restoring one brings your
+        events back without them.
       </div>
       <div class="stack">
         <button class="ghost" id="btnExport">EXPORT BACKUP</button>
@@ -821,20 +821,17 @@ async function syncBadge() {
 // ── backup ───────────────────────────────────────────────────
 // A plain JSON file, written by the browser straight to the phone's
 // downloads. Nothing is uploaded; there is nowhere to upload it to.
-// JSON can't hold a Blob, so the pictures ride along as data URLs. That
-// makes the file a good deal bigger than it used to be, which is the
-// price of a backup that actually restores everything.
-function toDataURL(blob) {
-  return new Promise((res) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result);
-    r.onerror = () => res(null);
-    r.readAsDataURL(blob);
-  });
-}
-// Decoded by hand rather than with fetch(). fetch() on a data: URL never
-// goes near the network, but this app's one promise is that it makes no
-// requests, and that shouldn't need a footnote to stay true.
+//
+// The dates only — pictures are left out deliberately, which keeps the
+// file small and legible. A restore therefore brings the events back
+// without their pictures, and the Settings text says so rather than
+// letting anyone find out the hard way.
+//
+// Reading them back in is still supported, so a backup written by the
+// version that did include them loses nothing. Decoded by hand rather
+// than with fetch(): fetch() on a data: URL never goes near the network,
+// but this app's one promise is that it makes no requests, and that
+// shouldn't need a footnote to stay true.
 function fromDataURL(s) {
   if (typeof s !== "string" || !s.startsWith("data:image/")) return null;
   const comma = s.indexOf(",");
@@ -848,13 +845,8 @@ function fromDataURL(s) {
   } catch (err) { return null; }
 }
 
-async function exportBackup() {
-  toast("Packing up…");
-  const out = [];
-  for (const ev of events) {
-    const { image, ...rest } = ev;
-    out.push(image ? { ...rest, image: await toDataURL(image) } : rest);
-  }
+function exportBackup() {
+  const out = events.map(({ image, ...rest }) => rest);
   const blob = new Blob([JSON.stringify({ app: "day-count", version: 2, exported: Date.now(), events: out }, null, 2)],
     { type: "application/json" });
   const a = document.createElement("a");

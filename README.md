@@ -24,8 +24,9 @@ Your dates — and any pictures you put behind them — live in IndexedDB on the
 phone and never leave it. The flip side is
 the same too: clearing site data for the domain in Chrome's settings deletes
 them for good, so `EXPORT BACKUP` writes the whole lot to one file worth keeping
-somewhere. Backups carry the pictures too, as data URLs — which makes the file
-much bigger, and makes it an actual backup.
+somewhere. The backup holds the dates, not the pictures — it stays small and
+readable, and a restore brings your events back without them. A backup written
+by an earlier version that did include pictures still restores them.
 
 ## Using it
 
