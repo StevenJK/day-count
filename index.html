@@ -95,6 +95,37 @@
   /* a card you've just jumped to from Events, so the eye lands on it */
   .focus.mark { border-color: var(--accent); }
 
+  /* ── a picture behind the number ──
+     The photo is knocked well back and the card's own dark is laid over
+     it as a gradient, because the number has to stay readable over a
+     bright sky or a white wall — a picture you can still make out is
+     worth more here than a picture at full strength you can't read. */
+  .focus.shot-on { min-height: 300px; display: flex; flex-direction: column; justify-content: center; }
+  .focus.shot-on.lesser { min-height: 210px; }
+  .focus .bg {
+    position: absolute; inset: 0; background-size: cover; background-position: center;
+    filter: brightness(.44) saturate(.8); z-index: 0;
+  }
+  .focus .bg::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(10,10,10,.50), rgba(10,10,10,.62) 55%, rgba(10,10,10,.80));
+  }
+  .focus.shot-on > *:not(.bg) { position: relative; z-index: 1; }
+  .focus.shot-on .count, .focus.shot-on .title { text-shadow: 0 2px 14px rgba(0,0,0,.85); }
+  .focus.shot-on .when, .focus.shot-on .note { opacity: .8; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
+  .focus.shot-on .label { text-shadow: 0 1px 10px rgba(0,0,0,.9); }
+  .focus.shot-on .unit { opacity: .75; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
+  /* the unfilled dots are a dim grey that disappears into a photo */
+  .focus.shot-on .dots i { background: rgba(255,255,255,.32); box-shadow: 0 1px 4px rgba(0,0,0,.6); }
+  .focus.shot-on .dots i.done { background: var(--paper); }
+  .focus.shot-on .dots i.now { background: var(--accent); }
+
+  /* the thumbnail in the form, so you can see what you picked */
+  .shot {
+    height: 120px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 8px;
+    background-size: cover; background-position: center;
+  }
+
   /* ── lists and forms ── */
   .row {
     display: flex; gap: 12px; align-items: center; background: var(--card);
@@ -232,6 +263,15 @@
         <label class="f" for="fNote">Note (optional)</label>
         <textarea id="fNote" maxlength="200" placeholder="Anything you want to see next to the number."></textarea>
       </div>
+      <div>
+        <label class="f">Picture (optional)</label>
+        <div id="fShot" class="shot hide"></div>
+        <div class="two">
+          <button type="button" class="ghost" id="fPick">CHOOSE PICTURE</button>
+          <button type="button" class="ghost hide" id="fDrop">REMOVE</button>
+        </div>
+        <input type="file" id="fImage" accept="image/*" class="hide">
+      </div>
       <button type="submit" class="bigbtn" id="fSave">SAVE</button>
       <button type="button" class="ghost" id="fCancel">CANCEL</button>
     </form>
@@ -273,6 +313,8 @@
       <div class="meta" style="margin:8px 0 12px">
         Everything lives in this browser's storage on this phone and nowhere
         else. Clearing site data deletes it for good, so keep a file somewhere.
+        The backup includes your pictures, which makes the file a good deal
+        bigger — that's the point of it.
       </div>
       <div class="stack">
         <button class="ghost" id="btnExport">EXPORT BACKUP</button>
@@ -346,6 +388,8 @@ let prefs = null;
 let view = "count";
 let editing = null;
 let formRepeat = "none";
+let formImage;             // undefined = unchanged, null = removed, Blob = newly picked
+let formImageURL = null;   // preview URL, revoked when the form closes
 let highlightId = null;    // the card marked after a tap in Events
 let pendingScroll = false; // ...and whether we still owe it a scroll
 
@@ -448,6 +492,46 @@ function sorted() {
   return up.concat(past);
 }
 
+// ── pictures ─────────────────────────────────────────────────
+// Picked with an ordinary file input, which on Android opens the phone's
+// own picker — the photo is handed straight to the page. It is never
+// uploaded, never fetched, and never leaves IndexedDB.
+//
+// Straight off a 3a a photo is around 5MB, and a handful of those would
+// fill the browser's quota for no benefit: the thing is a backdrop on a
+// 430px-wide card. So each one is redrawn through a canvas at a size
+// that suits the card and re-encoded as JPEG, which takes it to well
+// under a tenth of that.
+const SHOT_MAX = 1100, SHOT_QUALITY = .82;
+
+async function shrink(file) {
+  // from-image keeps EXIF rotation, without which portrait photos off a
+  // phone camera arrive on their side
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const scale = Math.min(1, SHOT_MAX / Math.max(bmp.width, bmp.height));
+  const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  c.getContext("2d").drawImage(bmp, 0, 0, w, h);
+  bmp.close();
+  return new Promise((res) => c.toBlob(res, "image/jpeg", SHOT_QUALITY));
+}
+
+// Object URLs are handed out per event and held until that event changes,
+// so re-rendering the Count screen every minute doesn't leak a new URL
+// for every picture each time.
+const shotURLs = new Map();
+function shotURL(ev) {
+  if (!ev.image) return null;
+  if (!shotURLs.has(ev.id)) shotURLs.set(ev.id, URL.createObjectURL(ev.image));
+  return shotURLs.get(ev.id);
+}
+function forgetShot(id) {
+  if (!shotURLs.has(id)) return;
+  URL.revokeObjectURL(shotURLs.get(id));
+  shotURLs.delete(id);
+}
+
 // ── the big numbers ──────────────────────────────────────────
 // Every event, counted, in the order they'll happen — what's coming
 // above what's gone, the same split as the Events list.
@@ -499,8 +583,11 @@ function card(ev, r, lead) {
   if (words) when.push(words);
   if (r.ordinal && r.dir !== "today") when.push(`${r.ordinal}${suffix(r.ordinal)} time round`);
 
+  const shot = shotURL(ev);
+
   return `
-    <div class="focus ${r.dir === "since" ? "past" : ""} ${lead ? "" : "lesser"}" data-id="${esc(ev.id)}">
+    <div class="focus ${r.dir === "since" ? "past" : ""} ${lead ? "" : "lesser"} ${shot ? "shot-on" : ""}" data-id="${esc(ev.id)}">
+      ${shot ? `<div class="bg" style="background-image:url(${esc(shot)})"></div>` : ""}
       <div class="label">${esc(label)}</div>
       <div class="count ${big.length > 4 ? "small" : ""}">${esc(big)}</div>
       <div class="unit">${esc(unit)}</div>
@@ -621,6 +708,8 @@ function openForm(ev) {
   formRepeat = ev ? (ev.repeat || "none") : "none";
   document.querySelectorAll("#fRepeat button").forEach((b) => b.classList.toggle("on", b.dataset.v === formRepeat));
   document.getElementById("fSave").textContent = ev ? "SAVE CHANGES" : "SAVE";
+  formImage = undefined;
+  showFormShot(ev && ev.image ? ev.image : null);
   let del = document.getElementById("fDelete");
   if (del) del.remove();
   if (ev) {
@@ -628,6 +717,7 @@ function openForm(ev) {
     del.type = "button"; del.id = "fDelete"; del.className = "ghost danger"; del.textContent = "DELETE";
     del.onclick = async () => {
       if (!confirm(`Delete “${ev.title}”?`)) return;
+      forgetShot(ev.id);
       await delEvent(ev.id); closeForm(); await refresh(); toast("Deleted");
     };
     f.appendChild(del);
@@ -638,7 +728,28 @@ function closeForm() {
   const f = document.getElementById("form");
   f.classList.add("hide"); f.style.display = "none";
   document.getElementById("btnNew").classList.remove("hide");
+  showFormShot(null);
+  formImage = undefined;
   editing = null;
+}
+
+// The preview above the two buttons. Its URL is its own — separate from
+// the ones the cards hold — and is thrown away as soon as it's replaced.
+function showFormShot(blob) {
+  const box = document.getElementById("fShot");
+  const drop = document.getElementById("fDrop");
+  if (formImageURL) { URL.revokeObjectURL(formImageURL); formImageURL = null; }
+  if (!blob) {
+    box.classList.add("hide"); box.style.backgroundImage = "";
+    drop.classList.add("hide");
+    document.getElementById("fPick").textContent = "CHOOSE PICTURE";
+    return;
+  }
+  formImageURL = URL.createObjectURL(blob);
+  box.style.backgroundImage = `url(${formImageURL})`;
+  box.classList.remove("hide");
+  drop.classList.remove("hide");
+  document.getElementById("fPick").textContent = "CHANGE";
 }
 function todayISO() {
   const d = new Date();
@@ -710,8 +821,41 @@ async function syncBadge() {
 // ── backup ───────────────────────────────────────────────────
 // A plain JSON file, written by the browser straight to the phone's
 // downloads. Nothing is uploaded; there is nowhere to upload it to.
-function exportBackup() {
-  const blob = new Blob([JSON.stringify({ app: "day-count", version: 1, exported: Date.now(), events }, null, 2)],
+// JSON can't hold a Blob, so the pictures ride along as data URLs. That
+// makes the file a good deal bigger than it used to be, which is the
+// price of a backup that actually restores everything.
+function toDataURL(blob) {
+  return new Promise((res) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => res(null);
+    r.readAsDataURL(blob);
+  });
+}
+// Decoded by hand rather than with fetch(). fetch() on a data: URL never
+// goes near the network, but this app's one promise is that it makes no
+// requests, and that shouldn't need a footnote to stay true.
+function fromDataURL(s) {
+  if (typeof s !== "string" || !s.startsWith("data:image/")) return null;
+  const comma = s.indexOf(",");
+  const head = s.slice(5, comma);
+  if (comma < 0 || !head.endsWith(";base64")) return null;
+  try {
+    const bin = atob(s.slice(comma + 1));
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return new Blob([buf], { type: head.slice(0, -7) });
+  } catch (err) { return null; }
+}
+
+async function exportBackup() {
+  toast("Packing up…");
+  const out = [];
+  for (const ev of events) {
+    const { image, ...rest } = ev;
+    out.push(image ? { ...rest, image: await toDataURL(image) } : rest);
+  }
+  const blob = new Blob([JSON.stringify({ app: "day-count", version: 2, exported: Date.now(), events: out }, null, 2)],
     { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -737,8 +881,10 @@ async function importBackup(file) {
         note: typeof raw.note === "string" ? raw.note.slice(0, 200) : "",
         alert: !!raw.alert,
         marked: Array.isArray(raw.marked) ? raw.marked : [],
+        image: fromDataURL(raw.image),
         created: raw.created || Date.now(),
       });
+      forgetShot(raw.id);
       n++;
     }
     await refresh();
@@ -776,8 +922,14 @@ async function refresh() {
   renderList();
   document.getElementById("alertToggle").classList.toggle("on", !!prefs.alerts);
   document.getElementById("badgeToggle").classList.toggle("on", !!prefs.badge);
-  document.getElementById("storeInfo").innerHTML =
-    `<b>${events.length}</b> event${events.length === 1 ? "" : "s"} stored on this device.`;
+  const shots = events.filter((e) => e.image).length;
+  let line = `<b>${events.length}</b> event${events.length === 1 ? "" : "s"} stored on this device`
+    + (shots ? `, <b>${shots}</b> with a picture` : "") + ".";
+  try {
+    const est = await navigator.storage.estimate();
+    if (est && est.usage) line += ` About <b>${(est.usage / 1048576).toFixed(1)} MB</b> used.`;
+  } catch (err) {}
+  document.getElementById("storeInfo").innerHTML = line;
   if (view === "settings") alertState();
   syncBadge();
 }
@@ -807,18 +959,36 @@ async function init() {
       time: document.getElementById("fTime").value || null,
       repeat: formRepeat,
       note: document.getElementById("fNote").value.trim(),
+      image: formImage === undefined ? (editing ? editing.image || null : null) : formImage,
       alert: editing ? !!editing.alert : false,
       // which milestones have already been announced, so a run of
       // background wake-ups doesn't say the same thing four times
       marked: editing ? (editing.marked || []) : [],
       created: editing ? editing.created : Date.now(),
     };
+    forgetShot(ev.id);
     await putEvent(ev);
     closeForm();
     highlightId = ev.id;
     pendingScroll = true;
     await refresh();
     toast(editing ? "Saved" : "Added");
+  };
+
+  document.getElementById("fPick").onclick = () => document.getElementById("fImage").click();
+  document.getElementById("fDrop").onclick = () => { formImage = null; showFormShot(null); };
+  document.getElementById("fImage").onchange = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const small = await shrink(file);
+      if (!small) throw new Error("no blob");
+      formImage = small;
+      showFormShot(small);
+    } catch (err) {
+      toast("Couldn't read that picture");
+    }
   };
 
   document.getElementById("alertToggle").onclick = () => setAlerts(!prefs.alerts);

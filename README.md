@@ -20,10 +20,12 @@ network requests at all** — not one. No account, no backend, no analytics, no
 fonts or scripts pulled in from anywhere. The only files it ever asks for are
 its own, and the service worker keeps those on the device.
 
-Your dates live in IndexedDB on the phone and never leave it. The flip side is
+Your dates — and any pictures you put behind them — live in IndexedDB on the
+phone and never leave it. The flip side is
 the same too: clearing site data for the domain in Chrome's settings deletes
 them for good, so `EXPORT BACKUP` writes the whole lot to one file worth keeping
-somewhere.
+somewhere. Backups carry the pictures too, as data URLs — which makes the file
+much bigger, and makes it an actual backup.
 
 ## Using it
 
@@ -42,6 +44,12 @@ next time it comes round and tells you which time that is — a 68th birthday, a
 17th anniversary. The 29th of February falls back to the 28th in the years it
 doesn't exist.
 
+**Pictures** — any event can have one behind its number, chosen from the phone
+in the usual way. It's handed straight to the app by Android's own picker: never
+uploaded, never fetched. Photos are redrawn smaller before they're stored, since
+a 5MB original is wasted on a card a few hundred pixels wide, and the card lays
+its own dark over the top so the number stays readable against a bright sky.
+
 **Milestone alerts** — an optional notification as a flagged date gets close:
 100, 50, 30, 14, 7, 3, 2 and 1 days out, then on the day. Deliberately
 approximate: see below.
@@ -57,7 +65,8 @@ check; no other logic lives outside `index.html`.
 
 | | |
 |---|---|
-| Storage | IndexedDB |
+| Storage | IndexedDB, pictures included, as Blobs |
+| Pictures | a file input, redrawn through a canvas at 1100px and re-encoded |
 | Offline | service worker caching the app's own files |
 | Alerts | Periodic Background Sync |
 | Icon badge | Badging API, where the launcher supports it |

@@ -12,7 +12,7 @@
 // Bump after changing index.html. Not strictly required — the shell
 // refreshes itself on the next open either way — but it throws the old
 // copy away cleanly.
-const VERSION = "v2";
+const VERSION = "v3";
 const CACHE = "day-count-" + VERSION;
 
 const SHELL = [
