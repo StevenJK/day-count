@@ -96,27 +96,38 @@
   .focus.mark { border-color: var(--accent); }
 
   /* ── a picture behind the number ──
-     The photo is knocked well back and the card's own dark is laid over
-     it as a gradient, because the number has to stay readable over a
-     bright sky or a white wall — a picture you can still make out is
-     worth more here than a picture at full strength you can't read. */
+     The number has to stay readable over a bright sky, but dimming the
+     whole photo until that's guaranteed just leaves a grey rectangle
+     where the picture was. So the image keeps most of its brightness and
+     the legibility work is done by the text: a heavy shadow carried
+     under every line, and a gradient weighted to the bottom, where the
+     small type is and where a photo's detail usually matters least. */
   .focus.shot-on { min-height: 300px; display: flex; flex-direction: column; justify-content: center; }
   .focus.shot-on.lesser { min-height: 210px; }
   .focus .bg {
     position: absolute; inset: 0; background-size: cover; background-position: center;
-    filter: brightness(.44) saturate(.8); z-index: 0;
+    filter: brightness(.78); z-index: 0;
   }
   .focus .bg::after {
     content: ''; position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(10,10,10,.50), rgba(10,10,10,.62) 55%, rgba(10,10,10,.80));
+    background: linear-gradient(180deg, rgba(10,10,10,.26), rgba(10,10,10,.40) 45%, rgba(10,10,10,.70));
   }
   .focus.shot-on > *:not(.bg) { position: relative; z-index: 1; }
-  .focus.shot-on .count, .focus.shot-on .title { text-shadow: 0 2px 14px rgba(0,0,0,.85); }
-  .focus.shot-on .when, .focus.shot-on .note { opacity: .8; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
-  .focus.shot-on .label { text-shadow: 0 1px 10px rgba(0,0,0,.9); }
-  .focus.shot-on .unit { opacity: .75; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
+  /* two shadows to a line: a tight one for the edge of the glyph, and a
+     wide soft one that darkens the picture immediately around it */
+  .focus.shot-on .count, .focus.shot-on .title {
+    text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 2px 26px rgba(0,0,0,.85);
+  }
+  .focus.shot-on .when, .focus.shot-on .note {
+    opacity: .95; text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 1px 16px rgba(0,0,0,.9);
+  }
+  /* the accent red has nowhere near enough contrast against a pale sky,
+     and no amount of shadow rescues it — on a picture the label goes white */
+  .focus.shot-on .label { color: var(--paper); text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 1px 16px rgba(0,0,0,.9); }
+  .focus.shot-on .unit { opacity: .95; text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 1px 16px rgba(0,0,0,.9); }
+  .focus.shot-on .clock { text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 1px 16px rgba(0,0,0,.9); }
   /* the unfilled dots are a dim grey that disappears into a photo */
-  .focus.shot-on .dots i { background: rgba(255,255,255,.32); box-shadow: 0 1px 4px rgba(0,0,0,.6); }
+  .focus.shot-on .dots i { background: rgba(255,255,255,.45); box-shadow: 0 1px 4px rgba(0,0,0,.8); }
   .focus.shot-on .dots i.done { background: var(--paper); }
   .focus.shot-on .dots i.now { background: var(--accent); }
 

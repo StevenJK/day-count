@@ -48,8 +48,11 @@ doesn't exist.
 **Pictures** — any event can have one behind its number, chosen from the phone
 in the usual way. It's handed straight to the app by Android's own picker: never
 uploaded, never fetched. Photos are redrawn smaller before they're stored, since
-a 5MB original is wasted on a card a few hundred pixels wide, and the card lays
-its own dark over the top so the number stays readable against a bright sky.
+a 5MB original is wasted on a card a few hundred pixels wide. The picture keeps
+most of its brightness — dimming it far enough to guarantee a readable number
+just leaves a grey rectangle — so the legibility work is done by heavy shadows
+under the text instead, and the label drops its red, which no shadow can rescue
+against a pale sky.
 
 **Milestone alerts** — an optional notification as a flagged date gets close:
 100, 50, 30, 14, 7, 3, 2 and 1 days out, then on the day. Deliberately
