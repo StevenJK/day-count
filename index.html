@@ -469,21 +469,28 @@ const fmtDate = (d) => `${WD[d.getDay()]} ${d.getDate()} ${MO[d.getMonth()]} ${d
 const fmtShort = (d) => `${String(d.getDate()).padStart(2, "0")} ${MO[d.getMonth()].slice(0, 3).toUpperCase()} ${d.getFullYear()}`;
 const fmtTime = (t) => `${String(t.h).padStart(2, "0")}:${String(t.mi).padStart(2, "0")}`;
 
-// 96 days is easier to hold as "13 weeks and 5 days"; 800 is easier as
-// "2 years, 2 months". Below a fortnight neither helps, so say nothing.
+// Weeks are how a wait is actually counted down, near or far, so every
+// event gets them: 96 days is "13 weeks, 5 days", 800 is "114 weeks, 2
+// days". Under a week there are none to give, and the big number on the
+// card already says it.
+function inWeeks(n) {
+  if (n < 7) return "";
+  const w = Math.floor(n / 7), d = n % 7;
+  const parts = [`${w} week${w === 1 ? "" : "s"}`];
+  if (d) parts.push(`${d} day${d === 1 ? "" : "s"}`);
+  return parts.join(", ");
+}
+
+// Past four months the weeks stop being a size you can picture, so give
+// the same span again in years and months underneath: 800 days is "2
+// years, 2 months".
 function inWords(n) {
-  if (n < 14) return "";
+  if (n < 120) return "";
   const parts = [];
-  if (n < 120) {
-    const w = Math.floor(n / 7), d = n % 7;
-    parts.push(`${w} week${w === 1 ? "" : "s"}`);
-    if (d) parts.push(`${d} day${d === 1 ? "" : "s"}`);
-  } else {
-    const y = Math.floor(n / 365), rem = n % 365, mo = Math.floor(rem / 30.44);
-    if (y) parts.push(`${y} year${y === 1 ? "" : "s"}`);
-    if (mo) parts.push(`${mo} month${mo === 1 ? "" : "s"}`);
-    if (!y && !mo) parts.push(`${n} days`);
-  }
+  const y = Math.floor(n / 365), rem = n % 365, mo = Math.floor(rem / 30.44);
+  if (y) parts.push(`${y} year${y === 1 ? "" : "s"}`);
+  if (mo) parts.push(`${mo} month${mo === 1 ? "" : "s"}`);
+  if (!y && !mo) parts.push(`${n} days`);
   return parts.join(", ");
 }
 
@@ -588,9 +595,11 @@ function card(ev, r, lead) {
     ? (r.ordinal ? (r.ordinal === 1 ? "year today" : "years today") : "days to go")
     : (r.abs === 1 ? "day" : "days");
   const words = inWords(r.abs);
+  const weeks = inWeeks(r.abs);
 
   const when = [];
   when.push(fmtDate(r.occ) + (r.at ? ` · ${fmtTime(parseTime(ev.time))}` : ""));
+  if (weeks) when.push(weeks);
   if (words) when.push(words);
   if (r.ordinal && r.dir !== "today") when.push(`${r.ordinal}${suffix(r.ordinal)} time round`);
 
