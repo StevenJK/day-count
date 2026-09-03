@@ -32,7 +32,7 @@ by an earlier version that did include pictures still restores them.
 
 **Count** — every event, counted, in the order they'll happen: what's coming
 above what's gone, the nearest one largest. Under each number: the full date, the
-same span in weeks (and in years and months, once it's far enough out), and — for anything with a time on it, on the day or
+same span in weeks — and in years and months once it's far enough out — and — for anything with a time on it, on the day or
 the day before — a live clock. The row of dots is how far through the wait you
 are, from the day you added it (or from last year, for a repeating one).
 
