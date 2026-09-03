@@ -487,6 +487,15 @@ function inWords(n) {
   return parts.join(", ");
 }
 
+// Beyond four months inWords switches to years and months, which is the
+// right shape for "how long" but useless for anyone counting down in
+// training weeks. So say the weeks too, on their own line above it.
+function inWeeks(n) {
+  if (n < 120) return ""; // inWords is already counting in weeks down here
+  const w = Math.floor(n / 7);
+  return `${w} week${w === 1 ? "" : "s"}`;
+}
+
 const suffix = (n) => (n % 100 >= 11 && n % 100 <= 13) ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th";
 
 // Sort order for the list and for stepping through with the arrows:
@@ -588,9 +597,11 @@ function card(ev, r, lead) {
     ? (r.ordinal ? (r.ordinal === 1 ? "year today" : "years today") : "days to go")
     : (r.abs === 1 ? "day" : "days");
   const words = inWords(r.abs);
+  const weeks = inWeeks(r.abs);
 
   const when = [];
   when.push(fmtDate(r.occ) + (r.at ? ` · ${fmtTime(parseTime(ev.time))}` : ""));
+  if (weeks) when.push(weeks);
   if (words) when.push(words);
   if (r.ordinal && r.dir !== "today") when.push(`${r.ordinal}${suffix(r.ordinal)} time round`);
 
