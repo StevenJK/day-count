@@ -12,6 +12,12 @@ smoking, how many years today. Nothing else.
 Android Chrome. Add it to your home screen and it behaves like an app: opens in
 its own window, works with no signal.
 
+<p align="center">
+  <img src="docs/count.png" width="45%" alt="The Count screen: every event counted, nearest one largest, with the full date, the span in weeks, and a row of dots showing how far through the wait you are.">
+  &nbsp;
+  <img src="docs/events.png" width="45%" alt="The Events screen: the same set as a compact list, one-off and yearly, coming above gone by.">
+</p>
+
 ## Everything stays on your phone
 
 Built to the same rule as its older sibling
@@ -110,3 +116,7 @@ it, turn Pages on, and it's yours.
 One quirk to expect once it's deployed: the service worker serves its cached
 copy first and refreshes in the background, so a change shows up the *second*
 time the app is opened, not the first.
+
+The two screenshots above are generated, not hand-taken: `node docs/shots.mjs`
+against a local server seeds a few sample events and redraws them, so they
+can't drift away from what the app actually looks like.
